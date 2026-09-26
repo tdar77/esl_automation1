@@ -1,0 +1,30 @@
+sample:
+  name: observer
+tests:
+  sample.bluetooth.observer:
+    harness: bluetooth
+    platform_allow:
+      - qemu_cortex_m3
+      - qemu_x86
+      - lp_em_cc2340r5
+      - lp_em_cc2340r5moda
+      - lp_em_cc2340r53
+      - lp_em_cc2340r53_wcsp
+      - lp_em_cc2745r10_q1/cc2745r10_q1
+      - lp_em_cc2745r10_q1/cc2755r10
+      - lp_em_cc2755p10
+      - lp_em_cc2755p20
+      - nrf52840dk/nrf52840
+    integration_platforms:
+      - qemu_cortex_m3
+    tags: bluetooth
+  sample.bluetooth.observer.extended:
+    harness: bluetooth
+    extra_args: CONF_FILE="prj_extended.conf"
+    platform_allow:
+      - qemu_cortex_m3
+      - qemu_x86
+      - nrf52840dk/nrf52840
+    tags: bluetooth
+    integration_platforms:
+      - qemu_cortex_m3

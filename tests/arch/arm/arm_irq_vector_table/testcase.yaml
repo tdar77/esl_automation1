@@ -1,0 +1,21 @@
+common:
+  filter: CONFIG_ARMV6_M_ARMV8_M_BASELINE or CONFIG_ARMV7_M_ARMV8_M_MAINLINE
+  tags:
+    - arm
+    - interrupt
+    - vector_table
+  arch_allow: arm
+tests:
+  arch.arm.irq_vector_table:
+    filter: not CONFIG_TRUSTED_EXECUTION_NONSECURE and
+            not CONFIG_GEN_ISR_TABLES
+    platform_exclude:
+      - mr_canhubk3
+      - lp_em_cc2745r10_q1/cc2745r10_q1
+      - lp_em_cc2745r10_q1/cc2755r10
+      - lp_em_cc2755p10
+      - lp_em_cc2755p20
+      - lp_em_cc2340r5
+      - lp_em_cc2340r5moda
+      - lp_em_cc2340r53
+      - lp_em_cc2340r53_wcsp

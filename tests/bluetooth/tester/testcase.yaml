@@ -1,0 +1,54 @@
+tests:
+  bluetooth.general.tester:
+    build_only: true
+    platform_allow:
+      - qemu_x86
+      - native_posix
+      - native_sim
+      - nrf52840dk/nrf52840
+    tags: bluetooth
+    harness: bluetooth
+  bluetooth.general.tester.nxp:
+    # Disabling monolithic since CI environment doesn't use blobs
+    build_only: true
+    harness: bluetooth
+    platform_allow:
+      - rd_rw612_bga
+      - frdm_rw612
+    extra_configs:
+      - CONFIG_NXP_MONOLITHIC_BT=n
+  bluetooth.general.tester_le_audio:
+    build_only: true
+    platform_allow:
+      - qemu_x86
+      - native_posix
+      - native_sim
+      - nrf5340dk/nrf5340/cpuapp
+    extra_args: OVERLAY_CONFIG="overlay-le-audio.conf"
+    tags: bluetooth
+    harness: bluetooth
+  bluetooth.general.tester_mesh:
+    build_only: true
+    platform_allow:
+      - qemu_x86
+      - native_posix
+      - native_sim
+      - nrf52840dk/nrf52840
+    extra_args: OVERLAY_CONFIG="overlay-mesh.conf"
+    tags: bluetooth
+    harness: bluetooth
+  bluetooth.general.tester.ti_lpf3:
+    extra_args:
+      - OVERLAY_CONFIG="boards/ti_lpf3.conf"
+      - DTC_OVERLAY_FILE="boards/ti_lpf3.overlay"
+    build_only: true
+    platform_allow:
+      - lp_em_cc2340r5moda
+      - lp_em_cc2340r53
+      - lp_em_cc2340r53_wcsp
+      - lp_em_cc2745r10_q1/cc2745r10_q1
+      - lp_em_cc2745r10_q1/cc2755r10
+      - lp_em_cc2755p10
+      - lp_em_cc2755p20
+    tags: bluetooth
+    harness: bluetooth
