@@ -25,7 +25,9 @@ typedef struct
 } APPL_ESL_AP_LOG_ENTRY;
 
 /* --------------------------------------------- Static Global Variables */
-static APPL_ESL_AP_LOG_ENTRY appl_esl_ap_log_table[APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP];
+#define APPL_ESL_AP_LOG_CAPACITY \
+    (APPL_ESL_MAX_NO_OF_GROUPS * APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP)
+static APPL_ESL_AP_LOG_ENTRY appl_esl_ap_log_table[APPL_ESL_AP_LOG_CAPACITY];
 
 /* --------------------------------------------- Function Prototype */
 static APPL_ESL_AP_LOG_ENTRY *appl_esl_ap_log_find_or_alloc(BT_ESL_ADDR *esl_addr);
@@ -38,14 +40,14 @@ void appl_esl_ap_log_init(void)
 
 static APPL_ESL_AP_LOG_ENTRY *appl_esl_ap_log_find_or_alloc(BT_ESL_ADDR *esl_addr)
 {
-    UCHAR i;
-    UCHAR free_index;
+    UINT16 i;
+    UINT16 free_index;
     UCHAR have_free_index;
 
     free_index = 0U;
     have_free_index = BT_ESL_FALSE;
 
-    for (i = 0U; i < APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP; i++)
+    for (i = 0U; i < APPL_ESL_AP_LOG_CAPACITY; i++)
     {
         if (BT_ESL_TRUE == appl_esl_ap_log_table[i].in_use)
         {
@@ -102,9 +104,9 @@ void appl_esl_ap_log_image_sent(BT_ESL_ADDR *esl_addr, UCHAR image_index)
 
 void appl_esl_ap_log_dump_all(void)
 {
-    UCHAR i;
+    UINT16 i;
 
-    for (i = 0U; i < APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP; i++)
+    for (i = 0U; i < APPL_ESL_AP_LOG_CAPACITY; i++)
     {
         if (BT_ESL_TRUE == appl_esl_ap_log_table[i].in_use)
         {

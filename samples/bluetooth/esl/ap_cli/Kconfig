@@ -92,7 +92,7 @@ config ESL_AP_AUTOMATION
 
 config ESL_AP_AUTO_SYNC_COUNT
 	int "Number of tags to auto-sync"
-	range 1 32
+	range 1 1000
 	default 3
 	depends on ESL_AP_AUTOMATION
 

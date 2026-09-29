@@ -16,6 +16,11 @@
 #include "appl_main.h"
 
 /* ----------------------------------------------- Macros */
+/* Automation address stride: IDs 0 through 15 for a full group. */
+#define APPL_ESL_AP_RESPONDERS_PER_GROUP               16U
+/* Original PAwR subevent count restored for initialization diagnostics. */
+#define APPL_ESL_AP_PAWR_SUBEVENT_COUNT                2U
+
 /**Macro to enable OTS in appl - now controlled via CMakeLists.txt */
 /* #define APPL_ESL_AP_OTS_SUPPORT */
 

@@ -22,7 +22,7 @@ Features
 * **Periodic Advertising with Responses (PAwR)**: Efficient communication with multiple tags
 * **GATT Client Operations**: Service discovery and characteristic access
 * **CLI Interface**: Interactive shell commands for testing and demonstration
-* **Multi-tag Management**: Support for up to 4 tags per group, 1 group maximum which is configurable
+* **Multi-tag Management**: Diagnostic profiles provision one group of four tags
 * **Tag Operations**: Display updates, LED control, sensor data collection
 * **Encrypted Advertising**: Support for secure ESL communications
 
@@ -34,6 +34,8 @@ The sample provides the following shell commands under the ``esl_ap`` namespace:
 * ``bt_on`` - Initialize Bluetooth stack
 * ``start_scan`` - Start scanning for ESL tags
 * ``stop_scan`` - Stop scanning operation
+* ``auto [count]`` - Sync 1-1000 additional tags within configured capacity, retaining previously synced tags
+* ``auto_stop`` - Finish the current tag attempt, then stop without removing successful tags
 * ``discover <Grp ID> <ESL ID>`` - Discover ESL services on a specific tag
 * ``start_padv`` - Start periodic advertising
 * ``stop_padv`` - Stop periodic advertising
@@ -42,6 +44,53 @@ The sample provides the following shell commands under the ``esl_ap`` namespace:
 * ``led_control <Grp ID> <ESL ID> <led_index> <clr brightness> <flsh pattern> <rpt type> [delay in s]`` - Control tag LED
 * ``display_update <Grp ID> <ESL ID> <display_index> <image index> [delay in s]`` - Update tag display
 * ``sensor_info <Grp ID> <ESL ID>`` - Read sensor information from tag
+
+Repeated automation runs continue assigning ESL IDs within the current AP boot.
+For example, ``esl_ap auto 3`` assigns addresses ``0:0`` through ``0:2``; after
+it finishes, ``esl_ap auto 1`` assigns ``0:3``. The current diagnostic profiles
+stop at four tags. With a compatible library and larger tables, the allocator
+advances through ``0:15``, then ``1:0`` through ``1:15``, and so on.
+These addresses are shown in decimal.
+The CLI address arguments for manual commands use hexadecimal.
+
+Only a failed connect/discover/configure/sync attempt is automatically removed.
+Its address is reused on the next run; successfully synced tags are retained.
+If removal fails, a new run retries cleanup before reusing the address.
+``auto_stop`` lets an in-flight attempt finish, so its final result is recorded.
+A new run is rejected as busy until that attempt completes or fails.
+
+With no count, automation uses ``CONFIG_ESL_AP_AUTO_SYNC_COUNT``. Counts and
+allocation tracking are 16-bit. A batch that exceeds the remaining configured
+group capacity is rejected before scanning. The sample profiles have been
+reverted to one group of four tags and four pairing slots to isolate the
+initialization failure with the bundled prebuilt ESL core library. Automation
+accepts this reduced single-group capacity and preserves successfully synced
+tags across runs.
+
+The original PAwR timing is also restored: periodic interval min/max 543.75 ms,
+two subevents, subevent interval 260 ms, response slot delay 150 ms, response
+slot spacing 4 ms, and ten response slots per subevent.
+
+For the eventual 1000-tag target, the planned 63-subevent PAwR schedule provides 63
+groups of 16 addresses (1008 total); the 1000th tag is ``62:7``. Keep
+``CONFIG_BT_ESL_MAX_ESL_TAGS_SUPPORTED=16`` and increase
+``CONFIG_BT_ESL_MAX_GROUPS_SUPPORTED`` as capacity grows, and restore the
+63-subevent schedule. This requires a compatible rebuilt ESL core library;
+the bundled prebuilt library rejects the two-group, 16-tag configuration.
+Bond storage must
+cover all retained tags across groups, even after their GATT connections have
+disconnected. This tree currently caps ``CONFIG_BT_MAX_PAIRED`` at 128, so
+1000 retained bonds still require a stack/storage change and memory validation
+on the target hardware. ``CONFIG_BT_MAX_CONN`` only limits simultaneous
+connections. Tags and the allocation cursor are not persisted across AP reboot.
+
+To check the diagnostic baseline, initialize the AP and verify that it no
+longer reports ``0xFFFF``. Complete ``auto 3`` and ``auto 1``; all four entries
+should remain visible in ``esl_dev_list``, and another ``auto 1`` should be
+rejected as full. Group rollover testing requires a compatible library and
+larger tables. Also
+check a failed attempt and a stop during provisioning: failure should remove
+only the failing tag, while stop should retain the tag if its attempt succeeds.
 
 Requirements
 ************

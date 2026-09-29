@@ -10,6 +10,7 @@
 /* --------------------------------------------- Header File Inclusion */
 #include "cli_esl_ap.h"
 #include "appl_esl_ap_auto.h"
+#include <errno.h>
 /*#include <zephyr/sys/util.h>*/
 
 #ifdef BT_ESL_SUPPORT_AP_ROLE
@@ -64,8 +65,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(cli_esl_ap,
     SHELL_CMD_ARG(set_conn_interval, NULL, "Set preferred conn interval", cmd_eslp_set_conn_interval, 3, 0),
 #endif /* APPL_ESL_DO_NOT_USE_DEFAULT_CONN_PARAMS */
 #ifdef CONFIG_ESL_AP_AUTOMATION
-    SHELL_CMD_ARG(auto, NULL, "Run AP automation to sync N tags. Optional arg: tag count (1-32), overrides Kconfig default", cmd_ap_auto, 1, 1),
-    SHELL_CMD(auto_stop, NULL, "Stop AP automation", cmd_ap_auto_stop),
+    SHELL_CMD_ARG(auto, NULL, "Sync N additional tags in groups of 16. Optional count: 1-1000, within configured capacity", cmd_ap_auto, 1, 1),
+    SHELL_CMD(auto_stop, NULL, "Stop AP automation after the current tag finishes", cmd_ap_auto_stop),
 #endif /* CONFIG_ESL_AP_AUTOMATION */
 #ifdef CONFIG_ESL_AP_LOG
     SHELL_CMD(log, NULL, "Print per-tag ping/image log", cmd_log),
@@ -130,22 +131,27 @@ int cmd_ap_init(const struct shell *shell, size_t argc, char **argv)
 int cmd_ap_auto(const struct shell *shell, size_t argc, char **argv)
 {
     API_RESULT retval;
-    UCHAR count = 0U;
+    UINT16 count = 0U;
+    long parsed_count;
+    char *end;
 
     if (argc == 2)
     {
-        count = (UCHAR)strtol(argv[1], NULL, 10);
-        if ((count < 1U) || (count > 32U))
+        errno = 0;
+        parsed_count = strtol(argv[1], &end, 10);
+        if ((errno == ERANGE) || (end == argv[1]) || (*end != '\0') ||
+            (parsed_count < 1L) || (parsed_count > APPL_ESL_AP_AUTO_MAX_COUNT))
         {
-            CONSOLE_OUT("Invalid tag count. Use 1-32.\n");
+            CONSOLE_OUT("Invalid tag count. Use 1-1000.\n");
             return -ENOEXEC;
         }
+        count = (UINT16)parsed_count;
     }
 
     retval = appl_esl_ap_auto_start(count);
     if (BT_ESL_AP_BUSY == retval)
     {
-        CONSOLE_OUT("ESL AP automation already running. Use 'esl_ap auto_stop' first.\n");
+        CONSOLE_OUT("ESL AP automation busy. Use 'esl_ap auto_stop' and wait for the current tag to finish.\n");
         return -ENOEXEC;
     }
     else if (BT_ESL_AP_SUCCESS != retval)
@@ -163,7 +169,7 @@ int cmd_ap_auto_stop(const struct shell *shell, size_t argc, char **argv)
 {
     appl_esl_ap_auto_stop();
 
-    CONSOLE_OUT("ESL AP automation stopped\n");
+    CONSOLE_OUT("ESL AP automation stop requested; any current tag will finish first\n");
 
     return 0;
 }

@@ -21,7 +21,7 @@
 /**
  * RSP Slot Spacing
  *
- * \note RSP Slot Spacing = interval in ms / 0.125
+ * \note RSP Slot Spacing = 4 ms / 0.125 ms = 32
  */
 #define APPL_ESLP_DEFAULT_RSP_SLOT_SPACING              0x20U
 /* RSP Slot Count */
@@ -30,17 +30,13 @@
 /**
  * RSP Slot Delay
  *
- * \note RSP Slot Delay = interval in ms / 1.25
+ * \note RSP Slot Delay = 150 ms / 1.25 ms = 120
  */
 #define APPL_ESLP_DEFAULT_RSP_SLOT_DELAY                0x78U
-/** GAP between subevent */
-#define APPL_ESLP_GAP_BETWEEN_SUBEVENT_IN_MS            1.25
 /**
  * Subevent Interval
  *
- * \note Subevent Interval in ms : ((rsp slot spacing * rsp slot count)
- * + rsp slot delay+ gap between subevent)
- * Subevent Interval = interval in ms / 1.25
+ * \note Subevent Interval = 260 ms / 1.25 ms = 208
  **/
 #define APPL_ESLP_DEFAULT_SUBEVENT_INTERVAL             0xD0U
 /**
@@ -49,21 +45,17 @@
  * \note Number of subevents is to be more than one for
  * initiation of periodic adv
 */
-#define APPL_ESLP_DEFAULT_NUM_OF_SUBEVENTS              2
+#define APPL_ESLP_DEFAULT_NUM_OF_SUBEVENTS              APPL_ESL_AP_PAWR_SUBEVENT_COUNT
 /**
  * Periodic Interval Min
  *
- * \note Periodic Interval Min interval :
- * (subevent interval * no of subevents)
- * Periodic Interval Min = interval in ms / 1.25
+ * \note Periodic Interval Min = 543.75 ms / 1.25 ms = 435
  */
 #define APPL_ESLP_DEFAULT_PERIODIC_INTERVAL_MIN         0x01B3U
 /**
  * Periodic Interval Max
  *
- * \note Periodic Interval Max interval :
- * (subevent interval * no of subevents)
- * Periodic Interval Max = interval in ms / 1.25
+ * \note Periodic Interval Max = 543.75 ms / 1.25 ms = 435
  */
 #define APPL_ESLP_DEFAULT_PERIODIC_INTERVAL_MAX         0x01B3U
 /** Periodic Interval Property */

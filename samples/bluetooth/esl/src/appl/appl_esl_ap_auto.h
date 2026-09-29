@@ -17,6 +17,8 @@
 
 #ifdef CONFIG_ESL_AP_AUTOMATION
 
+#define APPL_ESL_AP_AUTO_MAX_COUNT 1000U
+
 /* ----------------------------------------------- Structures/Data Types */
 enum appl_esl_ap_auto_state
 {
@@ -33,11 +35,14 @@ enum appl_esl_ap_auto_state
 };
 
 /* -------------------------------------------- Function Declarations */
-/* count: number of tags to sync before stopping, or 0 to use the Kconfig
- * default (CONFIG_ESL_AP_AUTO_SYNC_COUNT).
+/* count: number of additional tags to sync before stopping, or 0 to use the
+ * Kconfig default (CONFIG_ESL_AP_AUTO_SYNC_COUNT). Synced tags are retained
+ * across runs, filling IDs 0-15 before advancing to the next group.
+ * Returns BT_ESL_AP_INVALID_PARAMETER if the batch exceeds remaining capacity.
  * Returns BT_ESL_AP_BUSY if automation is already running (state is neither
  * AUTO_IDLE nor AUTO_DONE), without disturbing the run in progress. */
-API_RESULT appl_esl_ap_auto_start(UCHAR count);
+API_RESULT appl_esl_ap_auto_start(UINT16 count);
+/* Finish any in-flight attempt, then stop. Only failed attempts are removed. */
 void appl_esl_ap_auto_stop(void);
 
 /* Hook callbacks, invoked from appl_esl_ap.c at the end of the matching
