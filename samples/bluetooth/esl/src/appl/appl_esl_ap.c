@@ -26,7 +26,7 @@
 #define APPL_ESLP_DEFAULT_RSP_SLOT_SPACING              0x20U
 /* RSP Slot Count */
 #define APPL_ESLP_DEFAULT_RESPONSE_START                0U
-#define APPL_ESLP_DEFAULT_RESPONSE_COUNT                10U
+#define APPL_ESLP_DEFAULT_RESPONSE_COUNT                16U
 /**
  * RSP Slot Delay
  *
