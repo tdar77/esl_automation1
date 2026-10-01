@@ -55,6 +55,34 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(status[-1], "Done")
         self.assertFalse(self.c.auto_running)
 
+    def test_stop_mid_run(self):
+        status = []
+        self.c.auto_status_changed.connect(status.append)
+        self.feed("ESL AP automation started",
+                  "[APPL_AUTO]: ESL tag [0:0] added, connecting")
+        self.c.stop_auto()
+        self.assertEqual(self.sent, ["esl_ap auto_stop"])
+        self.assertEqual(status[-1], "Stop requested…")
+        self.assertTrue(self.c.auto_running)  # current tag is still finishing
+        self.feed("[APPL_AUTO]: stop requested - finishing current tag",
+                  "[APPL]: ESL tag [0 : 0] synchronized (status 0x0000)",
+                  "[APPL_AUTO]: 1/4 tags synced",
+                  "[APPL_AUTO]: batch finished - synced tags retained")
+        self.assertFalse(self.c.auto_running)
+
+    def test_stop_when_gui_missed_start(self):
+        # GUI attached mid-run: no "automation started" line was seen.
+        self.feed("[APPL_AUTO]: ESL tag [0:2] added, connecting")
+        self.assertTrue(self.c.auto_running)
+        self.c.stop_auto()
+        self.assertEqual(self.sent, ["esl_ap auto_stop"])
+
+    def test_stop_when_idle_still_sends(self):
+        self.c.stop_auto()
+        self.assertEqual(self.sent, ["esl_ap auto_stop"])
+        self.feed("[APPL_AUTO]: esl_ap auto_stop - state reset to IDLE")
+        self.assertFalse(self.c.auto_running)
+
     def test_failed_sync_is_not_listed(self):
         self.feed("[APPL]: ESL tag [0 : 0] synchronized (status 0x0101)")
         self.assertEqual(self.c.tags.rowCount(), 0)

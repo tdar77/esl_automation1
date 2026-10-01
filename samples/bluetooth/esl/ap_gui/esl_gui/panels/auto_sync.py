@@ -61,11 +61,14 @@ class AutoSyncPanel(QWidget):
         self._refresh_buttons()
 
     def _refresh_buttons(self, *_):
+        # Stop is always available when connected: auto_running is inferred
+        # from console text and can be wrong (GUI attached mid-run, run started
+        # from the console), and auto_stop is harmless when the AP is idle.
         connected = self.controller.is_connected()
         running = self.controller.auto_running
         self.start_btn.setEnabled(connected and not running)
         self.count.setEnabled(connected and not running)
-        self.stop_btn.setEnabled(connected and running)
+        self.stop_btn.setEnabled(connected)
 
     def _on_progress(self, synced: int, target: int) -> None:
         self.progress.setRange(0, max(target, 1))

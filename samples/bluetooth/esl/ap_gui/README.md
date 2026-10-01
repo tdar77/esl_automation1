@@ -79,8 +79,13 @@ through WSLg.
    `esl_ap auto <n>`.
 2. **Status** and **Current tag** follow the firmware's automation state
    machine. **Progress** follows the `[APPL_AUTO]: k/n tags synced` lines.
-3. **Stop** sends `esl_ap auto_stop`. The tag that is currently being synced
-   finishes first, and then the run stops.
+3. **Stop** sends `esl_ap auto_stop`. It is enabled whenever the GUI is
+   connected, even if the GUI didn't see the run start (for example, it
+   connected mid-run or the run was started from the console). If a tag is
+   being synced, the firmware finishes that tag first and then stops.
+   Otherwise it stops right away. Pressing Stop when nothing is running is
+   harmless: it resets the firmware's automation to idle and re-enables
+   **Start**.
 
 Each run syncs *n* additional tags. Tags that are already synced keep their
 addresses, and new tags get the next free IDs (`0:0`, `0:1`, … then group 1).

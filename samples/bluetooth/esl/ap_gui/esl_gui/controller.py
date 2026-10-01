@@ -90,7 +90,16 @@ class EslApController(QObject):
         self.send_command(commands.auto(count))
 
     def stop_auto(self) -> None:
+        if not self.is_connected():
+            self.notice.emit("Not connected")
+            return
         self.send_command(commands.auto_stop())
+        if self.auto_running:
+            self.auto_status_changed.emit("Stop requested…")
+        else:
+            # Nothing we know of is running, so no AutoStopped/AutoFinished
+            # line may follow; unlock the controls now.
+            self.auto_status_changed.emit("Stopped")
 
     def ping(self, group: int, esl: int) -> None:
         if not self.is_connected():
@@ -142,6 +151,8 @@ class EslApController(QObject):
 
     @_handle.register
     def _(self, event: ev.AutoTagInProgress) -> None:
+        # Also catches runs started before the GUI attached or from the console.
+        self._set_auto_running(True)
         self.auto_status_changed.emit("Syncing tag…")
         self.auto_current_tag.emit(f"{event.group}:{event.esl}")
 
@@ -149,6 +160,7 @@ class EslApController(QObject):
     def _(self, event: ev.AutoProgress) -> None:
         self.auto_progress.emit(event.synced, event.target)
         if event.synced < event.target:
+            self._set_auto_running(True)
             self.auto_status_changed.emit("Scanning for tags…")
             self.auto_current_tag.emit("")
 
