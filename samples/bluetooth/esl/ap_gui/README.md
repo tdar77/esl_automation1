@@ -100,6 +100,12 @@ retry.
 
 - A tag is added to the table when the AP prints
   `[APPL]: ESL tag [g : e] synchronized (status 0x0000)`.
+- The **Show** dropdown narrows the table to one group, or shows all groups.
+  Each entry includes a tag count, e.g. `Group 1 (16 tags)`. New groups appear
+  as their tags sync, and your selection stays in place while tags are added.
+  Picking a group also fills that group into the **Ping address** Group box.
+  The filter only changes what is displayed. Tags in other groups are still
+  tracked and updated.
 - To ping, double-click a row, or select one or more rows and press
   **Ping selected**.
 - **Ping address** pings any group/ESL ID, whether or not it is in the table.
@@ -139,7 +145,7 @@ is cleared, because all synced state on the AP is lost.
 | `esl_gui/parser.py` | **Pure Python.** Maps one console line to a typed `Event` (`TagSynced`, `AutoProgress`, `TagResponse`, …) through an ordered list of regex `RULES` |
 | `esl_gui/commands.py` | Builds every command string the GUI sends |
 | `esl_gui/controller.py` | Holds application state. Turns events into model updates and signals, and matches ping responses to the pings that were sent |
-| `esl_gui/tag_model.py` | `QAbstractTableModel` with one row per tag (`TagInfo`) |
+| `esl_gui/tag_model.py` | `QAbstractTableModel` with one row per tag (`TagInfo`). Views can wrap it in a proxy model (the Tags tab uses `GroupFilterProxy`), so code that maps a table row to a tag must call `proxy.mapToSource()` first |
 | `esl_gui/main_window.py` | Connection toolbar, feature tabs and console |
 | `esl_gui/panels/` | One file per feature tab, plus the console |
 | `tests/` | Unit tests for the parser/commands and the controller (replays console lines, no hardware needed) |

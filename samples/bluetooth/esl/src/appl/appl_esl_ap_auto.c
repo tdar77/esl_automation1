@@ -62,14 +62,42 @@ static K_WORK_DELAYABLE_DEFINE(sync_delay_work, sync_delay_work_handler);
 
 /* --------------------------------------------- Functions */
 /* Only an explicitly failed connect/configure/sync attempt may be removed.
- * If removal fails, retain the flags and retry before allocating this slot. */
+ * If removal fails, retain the flags and retry before allocating this slot.
+ *
+ * The stack refuses to remove a tag in BT_ESL_AP_CONNECTED state, which is
+ * where a failed discovery/config leaves it, and where the sync timer puts
+ * it back on a sync timeout. In that case disconnect it: the stack resets the
+ * tag to BT_ESL_AP_UNASSOCIATE before our on_disconnected hook runs, and the
+ * hook retries the removal. */
 static API_RESULT appl_esl_ap_auto_cleanup_failed_tag(void)
 {
     API_RESULT retval;
+    UCHAR      state;
 
     if (BT_ESL_FALSE == tag_failed)
     {
         return BT_ESL_AP_SUCCESS;
+    }
+
+    if ((BT_ESL_AP_SUCCESS == appl_esl_ap_get_esl_tag_state(&current_esl_addr, &state)) &&
+        (BT_ESL_AP_CONNECTED == state))
+    {
+        APPL_ESL_TRC(
+        "[APPL_AUTO]: failed tag [%d:%d] still connected - disconnecting before removal\n",
+        current_esl_addr.group_id, current_esl_addr.esl_id);
+
+        retval = appl_esl_ap_disconnect_esl(&current_esl_addr);
+        if (BT_ESL_AP_SUCCESS == retval)
+        {
+            /* Removal completes in appl_esl_ap_auto_on_disconnected(). */
+            return BT_ESL_AP_BUSY;
+        }
+
+        /* No link left to tear down; the stack just never saw the
+         * disconnect. Demote the stale state so the entry can be removed. */
+        (void)BT_esl_ap_set_esl_tag_state(&current_esl_addr,
+                                          BT_ESL_AP_CONNECTED,
+                                          BT_ESL_AP_UNASSOCIATE);
     }
 
     retval = appl_esl_ap_remove_esl_tag(&current_esl_addr);
@@ -182,6 +210,10 @@ API_RESULT appl_esl_ap_auto_start(UINT16 count)
     retval = appl_esl_ap_auto_cleanup_failed_tag();
     if (BT_ESL_AP_SUCCESS != retval)
     {
+        APPL_ESL_ERR(
+        "[APPL_AUTO]: esl_ap auto rejected - failed tag [%d:%d] not yet removed, "
+        "retry once it disconnects\n",
+        current_esl_addr.group_id, current_esl_addr.esl_id);
         return retval;
     }
 
@@ -270,6 +302,14 @@ void appl_esl_ap_auto_on_disconnected(BT_ESL_ADDR *esl_addr)
     APPL_ESL_TRC(
     "[APPL_AUTO]: on_disconnected hook (tag [%d:%d], state %d)\n",
     esl_addr->group_id, esl_addr->esl_id, auto_state);
+
+    /* Deferred removal of a failed tag that was still connected. */
+    if ((BT_ESL_TRUE == tag_failed) &&
+        (BT_ESL_TRUE == appl_esl_ap_auto_is_current(esl_addr)))
+    {
+        (void)appl_esl_ap_auto_cleanup_failed_tag();
+        return;
+    }
 
     /* During sync, the tag normally drops GATT before the sync callback.
      * An earlier disconnect aborts the attempt and must not leave stop

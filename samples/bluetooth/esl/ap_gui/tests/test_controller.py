@@ -9,7 +9,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QCoreApplication
+    from PyQt6.QtWidgets import QApplication
     from esl_gui import controller as ctl
 except ImportError:  # pragma: no cover
     ctl = None
@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover
 class ControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = QCoreApplication.instance() or QCoreApplication([])
+        cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
         self.c = ctl.EslApController()
