@@ -32,6 +32,15 @@ class PendingPing:
     sent_at: float
 
 
+@dataclass
+class SyncAttempt:
+    """Tag the automation is currently walking from 'added' to 'synchronized'."""
+    group: int
+    esl: int
+    started_at: float
+    scan_s: float | None
+
+
 class EslApController(QObject):
     connection_changed = pyqtSignal(bool)
     line_received = pyqtSignal(str)       # every console line, for the console panel
@@ -42,6 +51,9 @@ class EslApController(QObject):
     auto_status_changed = pyqtSignal(str)
     auto_progress = pyqtSignal(int, int)  # synced, target
     auto_current_tag = pyqtSignal(str)
+    auto_group = pyqtSignal(int)          # group the current/last run fills
+    # group, esl, scan seconds (None if the scan start was not seen), sync seconds
+    sync_timed = pyqtSignal(int, int, object, float)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -51,10 +63,20 @@ class EslApController(QObject):
 
         self.auto_running = False
         self._auto_requested = 0
+        self._auto_group: int | None = None
+        # Set once a specific [APPL_AUTO] error has been shown for a failed
+        # start, so the generic CLI summary that follows doesn't replace it.
+        self._specific_error_shown = False
         self._pending_pings: deque[PendingPing] = deque()
         # Tag the most recent response belongs to; BASIC STATE / ERROR lines
         # that follow a response are attributed to it.
         self._last_responder: tuple[int, int] | None = None
+
+        # Sync timing is measured from console line arrival times; UART delay
+        # is milliseconds against syncs of seconds. Replaceable for tests.
+        self.clock = time.monotonic
+        self._scan_started: float | None = None
+        self._sync_attempt: SyncAttempt | None = None
 
         self.link.line_received.connect(self._on_line)
         self.link.connection_changed.connect(self.connection_changed)
@@ -85,9 +107,11 @@ class EslApController(QObject):
         else:
             self.notice.emit("Not connected")
 
-    def start_auto(self, count: int) -> None:
+    def start_auto(self, count: int, group: int = 0) -> None:
         self._auto_requested = count
-        self.send_command(commands.auto(count))
+        self._auto_group = group
+        self._specific_error_shown = False
+        self.send_command(commands.auto(count, group))
 
     def stop_auto(self) -> None:
         if not self.is_connected():
@@ -108,7 +132,7 @@ class EslApController(QObject):
         tag = self.tags.ensure(group, esl)
         self.tags.update(group, esl, pings_sent=tag.pings_sent + 1,
                          last_ping="waiting…", latency_s=None)
-        self._pending_pings.append(PendingPing(group, esl, time.monotonic()))
+        self._pending_pings.append(PendingPing(group, esl, self.clock()))
         self.send_command(commands.ping(group, esl))
 
     # ---------------------------------------------------------- Input
@@ -126,6 +150,7 @@ class EslApController(QObject):
     def _(self, event: ev.Rebooted) -> None:
         self.tags.clear()
         self._pending_pings.clear()
+        self._reset_sync_timing()
         self._last_responder = None
         self._set_auto_running(False)
         self.auto_status_changed.emit("Idle (AP rebooted)")
@@ -134,15 +159,39 @@ class EslApController(QObject):
 
     @_handle.register
     def _(self, event: ev.TagSynced) -> None:
-        if event.status == 0:
+        attempt = self._sync_attempt
+        if attempt is not None and (attempt.group, attempt.esl) == (event.group, event.esl):
+            self._sync_attempt = None
+        else:
+            attempt = None  # synced outside automation (manual sync_esl): no timing
+        if event.status != 0:
+            return
+        if attempt is None:
             self.tags.update(event.group, event.esl, synced_at=datetime.now())
             self.notice.emit(f"Tag {event.group}:{event.esl} synced")
+            return
+        sync_s = self.clock() - attempt.started_at
+        self.tags.update(event.group, event.esl, synced_at=datetime.now(),
+                         scan_s=attempt.scan_s, sync_s=sync_s)
+        self.sync_timed.emit(event.group, event.esl, attempt.scan_s, sync_s)
+        self.notice.emit(f"Tag {event.group}:{event.esl} synced in {sync_s:.2f} s")
 
     # --- automation
     @_handle.register
+    def _(self, event: ev.AutoRequested) -> None:
+        # Authoritative target/group, also for runs typed in the console.
+        self._auto_requested = event.target
+        self._auto_group = event.group
+        self._specific_error_shown = False
+        self.auto_group.emit(event.group)
+
+    @_handle.register
     def _(self, event: ev.AutoStarted) -> None:
         self._set_auto_running(True)
-        self.auto_status_changed.emit("Scanning for tags…")
+        self._specific_error_shown = False
+        self._sync_attempt = None
+        self._scan_started = self.clock()
+        self.auto_status_changed.emit(self._scanning_text())
         self.auto_progress.emit(0, self._auto_requested)
 
     @_handle.register
@@ -153,6 +202,13 @@ class EslApController(QObject):
     def _(self, event: ev.AutoTagInProgress) -> None:
         # Also catches runs started before the GUI attached or from the console.
         self._set_auto_running(True)
+        if self._auto_group != event.group:
+            self._auto_group = event.group
+            self.auto_group.emit(event.group)
+        now = self.clock()
+        scan_s = now - self._scan_started if self._scan_started is not None else None
+        self._scan_started = None
+        self._sync_attempt = SyncAttempt(event.group, event.esl, now, scan_s)
         self.auto_status_changed.emit("Syncing tag…")
         self.auto_current_tag.emit(f"{event.group}:{event.esl}")
 
@@ -161,12 +217,14 @@ class EslApController(QObject):
         self.auto_progress.emit(event.synced, event.target)
         if event.synced < event.target:
             self._set_auto_running(True)
-            self.auto_status_changed.emit("Scanning for tags…")
+            self._scan_started = self.clock()  # firmware rescans for the next tag
+            self.auto_status_changed.emit(self._scanning_text())
             self.auto_current_tag.emit("")
 
     @_handle.register
     def _(self, event: ev.AutoFinished) -> None:
         self._set_auto_running(False)
+        self._reset_sync_timing()
         self.auto_status_changed.emit("Done")
         self.auto_current_tag.emit("")
 
@@ -177,13 +235,18 @@ class EslApController(QObject):
     @_handle.register
     def _(self, event: ev.AutoStopped) -> None:
         self._set_auto_running(False)
+        self._reset_sync_timing()
         self.auto_status_changed.emit("Stopped")
         self.auto_current_tag.emit("")
 
     @_handle.register
     def _(self, event: ev.AutoError) -> None:
+        if event.generic and self._specific_error_shown and not self.auto_running:
+            return  # keep the specific reason printed just before it
+        self._specific_error_shown = not event.generic
         prefix = "Aborted" if self.auto_running else "Error"
         self._set_auto_running(False)
+        self._reset_sync_timing()
         self.auto_status_changed.emit(f"{prefix}: {event.message}")
         self.auto_current_tag.emit("")
 
@@ -197,7 +260,7 @@ class EslApController(QObject):
             return
         self._last_responder = (pending.group, pending.esl)
         self.tags.update(pending.group, pending.esl, last_ping="OK",
-                         latency_s=time.monotonic() - pending.sent_at)
+                         latency_s=self.clock() - pending.sent_at)
 
     @_handle.register
     def _(self, event: ev.BasicStateFlag) -> None:
@@ -232,10 +295,19 @@ class EslApController(QObject):
         return None
 
     def _expire_pings(self) -> None:
-        now = time.monotonic()
+        now = self.clock()
         while self._pending_pings and now - self._pending_pings[0].sent_at > PING_TIMEOUT_S:
             pending = self._pending_pings.popleft()
             self.tags.update(pending.group, pending.esl, last_ping="No response")
+
+    def _scanning_text(self) -> str:
+        if self._auto_group is None:
+            return "Scanning for tags…"
+        return f"Scanning for tags (group {self._auto_group})…"
+
+    def _reset_sync_timing(self) -> None:
+        self._scan_started = None
+        self._sync_attempt = None
 
     def _set_auto_running(self, running: bool) -> None:
         if running != self.auto_running:

@@ -9,7 +9,7 @@ Current features:
 
 | Tab | What it does | Shell command(s) |
 |---|---|---|
-| **Auto Sync** | Sync *N* more tags to the PAwR train, with live status and progress | `esl_ap auto <n>`, `esl_ap auto_stop` |
+| **Auto Sync** | Sync *N* more tags to the PAwR train, with live status and progress | `esl_ap auto <n> <group>`, `esl_ap auto_stop` |
 | **Tags / Ping** | Table of synced tags; ping one or more tags and show the response | `esl_ap ping <grp> <esl>` |
 | Console (always visible) | Full AP output, plus a free-form command line with Up/Down history | anything |
 
@@ -75,8 +75,9 @@ through WSLg.
 
 ### Auto Sync
 
-1. Set **Tags to sync** and press **Start auto sync**. This sends
-   `esl_ap auto <n>`.
+1. Set **Tags to sync** and **Group**, then press **Start auto sync**. This
+   sends `esl_ap auto <n> <group>`. Both arguments are decimal, unlike
+   `ping`, which takes hex.
 2. **Status** and **Current tag** follow the firmware's automation state
    machine. **Progress** follows the `[APPL_AUTO]: k/n tags synced` lines.
 3. **Stop** sends `esl_ap auto_stop`. It is enabled whenever the GUI is
@@ -87,10 +88,45 @@ through WSLg.
    harmless: it resets the firmware's automation to idle and re-enables
    **Start**.
 
-Each run syncs *n* additional tags. Tags that are already synced keep their
-addresses, and new tags get the next free IDs (`0:0`, `0:1`, … then group 1).
-The firmware rejects a count that exceeds the configured capacity, and the
-error appears in **Status**.
+Each run fills one group. It syncs *n* additional tags into that group,
+using the group's next free ESL IDs. For example, `auto 3 2` assigns `2:0`
+to `2:2`, and a later `auto 2 2` assigns `2:3` and `2:4`. Tags already synced
+in any group keep their addresses. A group has 16 response slots, so
+**Tags to sync** goes up to 16. If you start a run from the console, the GUI
+reads the group from the firmware's `auto requested (... next [g:e])` line and
+updates **Group** to match.
+
+The line under the controls estimates the chosen group's free slots from the
+tags the GUI has seen sync. Tags synced before the GUI connected aren't
+counted, so treat the number as a hint. The firmware does the real check and
+rejects the run in these cases:
+
+- the group is beyond its configured group count (`Invalid group 5 (valid groups: 0-3)`)
+- the count exceeds the group's free slots (`Cannot add 5 tags to group 1: only 3 of 16 response slots free`)
+
+The reason appears in **Status**. When the firmware prints both a specific
+`[APPL_AUTO]` error and the CLI's generic summary, the GUI keeps the specific
+one.
+
+**Sync time** shows the last tag's timing, plus the average, minimum and
+maximum for the current run. The same numbers are stored per tag in the
+**Scan time** and **Sync time** columns of the Tags tab. Two durations are
+measured:
+
+| Measurement | From | To |
+|---|---|---|
+| Scan time | `ESL AP automation started`, or `[APPL_AUTO]: k/n tags synced` for later tags | `[APPL_AUTO]: ESL tag [g:e] added, connecting` |
+| Sync time | `... added, connecting` | `[APPL]: ESL tag [g : e] synchronized (status 0x0000)` |
+
+Sync time covers connect, GATT/OTS discovery, configuration, and PAwR sync.
+For the first tag in a session, it also includes the 1 s
+`APPL_ESL_AP_AUTO_SYNC_DELAY` after periodic advertising starts, so expect
+the first tag to be about 1 s slower. The times are taken when each console
+line reaches the PC, so UART/USB delay adds a few milliseconds of error. That
+is negligible against syncs that take seconds, so no firmware support is
+needed. Scan time is blank if the GUI connected while the AP was already
+scanning. Tags synced by hand (`esl_ap sync_esl` from the console) have no
+timing, because the firmware prints no "added" line for them.
 
 If the firmware reports a failure (connect, discovery, config or sync), the
 run stops. Status then shows `Aborted: <firmware message>`. Start it again to

@@ -65,7 +65,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(cli_esl_ap,
     SHELL_CMD_ARG(set_conn_interval, NULL, "Set preferred conn interval", cmd_eslp_set_conn_interval, 3, 0),
 #endif /* APPL_ESL_DO_NOT_USE_DEFAULT_CONN_PARAMS */
 #ifdef CONFIG_ESL_AP_AUTOMATION
-    SHELL_CMD_ARG(auto, NULL, "Sync N additional tags in groups of 16. Optional count: 1-1000, within configured capacity", cmd_ap_auto, 1, 1),
+    SHELL_CMD_ARG(auto, NULL, "Sync N additional tags into a group. Usage: auto [count] [group] (count 1-1000 within free response slots, group default 0)", cmd_ap_auto, 1, 3),
     SHELL_CMD(auto_stop, NULL, "Stop AP automation after the current tag finishes", cmd_ap_auto_stop),
 #endif /* CONFIG_ESL_AP_AUTOMATION */
 #ifdef CONFIG_ESL_AP_LOG
@@ -132,10 +132,12 @@ int cmd_ap_auto(const struct shell *shell, size_t argc, char **argv)
 {
     API_RESULT retval;
     UINT16 count = 0U;
+    UCHAR group = 0U;
     long parsed_count;
+    long parsed_group;
     char *end;
 
-    if (argc == 2)
+    if (argc >= 2)
     {
         errno = 0;
         parsed_count = strtol(argv[1], &end, 10);
@@ -148,10 +150,28 @@ int cmd_ap_auto(const struct shell *shell, size_t argc, char **argv)
         count = (UINT16)parsed_count;
     }
 
-    retval = appl_esl_ap_auto_start(count);
+    if (argc == 3)
+    {
+        errno = 0;
+        parsed_group = strtol(argv[2], &end, 10);
+        if ((errno == ERANGE) || (end == argv[2]) || (*end != '\0') ||
+            (parsed_group < 0L) || (parsed_group >= (long)APPL_ESL_MAX_NO_OF_GROUPS))
+        {
+            CONSOLE_OUT("Invalid group. Use 0-%d.\n", APPL_ESL_MAX_NO_OF_GROUPS - 1U);
+            return -ENOEXEC;
+        }
+        group = (UCHAR)parsed_group;
+    }
+
+    retval = appl_esl_ap_auto_start(count, group);
     if (BT_ESL_AP_BUSY == retval)
     {
         CONSOLE_OUT("ESL AP automation busy. Use 'esl_ap auto_stop' and wait for the current tag to finish.\n");
+        return -ENOEXEC;
+    }
+    else if (BT_ESL_AP_INVALID_PARAMETER == retval)
+    {
+        CONSOLE_OUT("Invalid group or too many tags for the free response slots in that group.\n");
         return -ENOEXEC;
     }
     else if (BT_ESL_AP_SUCCESS != retval)

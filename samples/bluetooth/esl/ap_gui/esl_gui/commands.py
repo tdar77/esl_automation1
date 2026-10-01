@@ -5,15 +5,22 @@ to ``SHELL_CMD`` entries in ``src/appl/cli_esl_ap.c`` lives in one place.
 """
 
 AUTO_MAX_COUNT = 1000  # APPL_ESL_AP_AUTO_MAX_COUNT in appl_esl_ap_auto.h
+SLOTS_PER_GROUP = 16   # APPL_ESL_AP_RESPONDERS_PER_GROUP: max tags per group
 GROUP_ID_MAX = 0x7F    # ESL group IDs are 7 bits
 ESL_ID_MAX = 0xFE      # 0xFF is the broadcast ESL ID
 
 
-def auto(count: int) -> str:
-    """Sync ``count`` additional tags (cmd_ap_auto, decimal argument)."""
+def auto(count: int, group: int = 0) -> str:
+    """Sync ``count`` additional tags into ``group`` (cmd_ap_auto).
+
+    Both arguments are decimal. The firmware rejects a group above
+    APPL_ESL_MAX_NO_OF_GROUPS - 1 or a count above the group's free slots.
+    """
     if not 1 <= count <= AUTO_MAX_COUNT:
         raise ValueError(f"count must be 1-{AUTO_MAX_COUNT}")
-    return f"esl_ap auto {count}"
+    if not 0 <= group <= GROUP_ID_MAX:
+        raise ValueError(f"group must be 0-{GROUP_ID_MAX}")
+    return f"esl_ap auto {count} {group}"
 
 
 def auto_stop() -> str:

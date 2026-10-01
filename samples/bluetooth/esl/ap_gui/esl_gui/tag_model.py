@@ -13,6 +13,8 @@ class TagInfo:
     group: int
     esl: int
     synced_at: datetime | None = None
+    scan_s: float | None = None   # AP scanning until this tag was found
+    sync_s: float | None = None   # found -> connect/discover/config -> PAwR synced
     pings_sent: int = 0
     last_ping: str = ""
     latency_s: float | None = None
@@ -23,14 +25,19 @@ class TagInfo:
         return f"{self.group}:{self.esl}"
 
 
+def _seconds(value: float | None) -> str:
+    return f"{value:.2f} s" if value is not None else ""
+
+
 class TagTableModel(QAbstractTableModel):
     """One row per tag, sorted by (group, esl).
 
     To add a column: append to COLUMNS and return its value in _cell().
     """
 
-    COLUMNS = ["Tag", "Group", "ESL ID", "Synced at", "Pings", "Last ping",
-               "Latency", "State flags"]
+    COLUMNS = ["Tag", "Group", "ESL ID", "Synced at", "Scan time", "Sync time",
+               "Pings", "Last ping", "Latency", "State flags"]
+    CENTERED = {1, 2, 4, 5, 6, 8}
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -54,7 +61,7 @@ class TagTableModel(QAbstractTableModel):
         tag = self._tags[index.row()]
         if role == Qt.ItemDataRole.DisplayRole:
             return self._cell(tag, index.column())
-        if role == Qt.ItemDataRole.TextAlignmentRole and index.column() in (1, 2, 4, 6):
+        if role == Qt.ItemDataRole.TextAlignmentRole and index.column() in self.CENTERED:
             return Qt.AlignmentFlag.AlignCenter
         return None
 
@@ -70,12 +77,16 @@ class TagTableModel(QAbstractTableModel):
             case 3:
                 return tag.synced_at.strftime("%H:%M:%S") if tag.synced_at else "unknown"
             case 4:
-                return tag.pings_sent
+                return _seconds(tag.scan_s)
             case 5:
-                return tag.last_ping
+                return _seconds(tag.sync_s)
             case 6:
-                return f"{tag.latency_s:.2f} s" if tag.latency_s is not None else ""
+                return tag.pings_sent
             case 7:
+                return tag.last_ping
+            case 8:
+                return _seconds(tag.latency_s)
+            case 9:
                 return ", ".join(name for name, on in tag.flags.items() if on)
         return None
 

@@ -41,6 +41,17 @@ class TagSynced(Event):
 
 
 @dataclass(frozen=True)
+class AutoRequested(Event):
+    """'[APPL_AUTO]: esl_ap auto requested (target n tags, next [g:e])'.
+
+    Printed just before 'automation started', also for runs typed in the console.
+    """
+    target: int
+    group: int
+    next_esl: int
+
+
+@dataclass(frozen=True)
 class AutoStarted(Event):
     """cmd_ap_auto(): 'ESL AP automation started'."""
 
@@ -81,8 +92,13 @@ class AutoStopped(Event):
 
 @dataclass(frozen=True)
 class AutoError(Event):
-    """Automation failed to start or aborted (state machine is now IDLE)."""
+    """Automation failed to start or aborted (state machine is now IDLE).
+
+    ``generic`` marks CLI summary lines that follow a more specific
+    [APPL_AUTO] error, so the specific reason can be kept on screen.
+    """
     message: str
+    generic: bool = False
 
 
 @dataclass(frozen=True)
@@ -119,7 +135,8 @@ class PingSendFailed(Event):
 # ---------------------------------------------------------------------- Rules
 Rule = tuple[re.Pattern[str], Callable[[re.Match[str]], Event | None]]
 
-_AUTO_ERROR_HINT = re.compile(r"fail|cannot|disconnected before", re.IGNORECASE)
+_AUTO_ERROR_HINT = re.compile(r"fail|cannot|invalid|requires|disconnected before",
+                              re.IGNORECASE)
 
 
 def _auto_trace(m: re.Match[str]) -> Event | None:
@@ -145,9 +162,15 @@ RULES: list[Rule] = [
     (re.compile(r"ESL AP automation started"), lambda m: AutoStarted()),
     (re.compile(r"ESL AP automation busy"), lambda m: AutoBusy()),
     (re.compile(r"(Failed to start ESL AP automation \(0x[0-9A-Fa-f]+\))"),
-     lambda m: AutoError(m[1])),
+     lambda m: AutoError(m[1], generic=True)),
+    (re.compile(r"(Invalid group or too many tags.*)"),
+     lambda m: AutoError(m[1].strip(), generic=True)),
     (re.compile(r"(Invalid tag count\..*)"), lambda m: AutoError(m[1].strip())),
+    (re.compile(r"(Invalid group\. Use .*)"), lambda m: AutoError(m[1].strip())),
     (re.compile(r"\[APPL_AUTO\]: esl_ap auto rejected"), lambda m: AutoBusy()),
+    (re.compile(r"\[APPL_AUTO\]: esl_ap auto requested \(target (\d+) tags, "
+                r"next \[(\d+):(\d+)\]\)"),
+     lambda m: AutoRequested(int(m[1]), int(m[2]), int(m[3]))),
     (re.compile(r"\[APPL_AUTO\]: ESL tag \[(\d+):(\d+)\] added, connecting"),
      lambda m: AutoTagInProgress(int(m[1]), int(m[2]))),
     (re.compile(r"\[APPL_AUTO\]: (\d+)/(\d+) tags synced"),

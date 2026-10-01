@@ -41,7 +41,7 @@ class ControllerTest(unittest.TestCase):
         self.c.auto_status_changed.connect(status.append)
 
         self.c.start_auto(2)
-        self.assertEqual(self.sent, ["esl_ap auto 2"])
+        self.assertEqual(self.sent, ["esl_ap auto 2 0"])
         self.feed("ESL AP automation started",
                   "[APPL_AUTO]: ESL tag [0:0] added, connecting",
                   "[APPL]: ESL tag [0 : 0] synchronized (status 0x0000)",
@@ -82,6 +82,75 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(self.sent, ["esl_ap auto_stop"])
         self.feed("[APPL_AUTO]: esl_ap auto_stop - state reset to IDLE")
         self.assertFalse(self.c.auto_running)
+
+    def at(self, t, *lines):
+        """Feed lines as if they arrived at clock time t (seconds)."""
+        self.c.clock = lambda: t
+        self.feed(*lines)
+
+    def test_sync_timing(self):
+        timed = []
+        self.c.sync_timed.connect(lambda *a: timed.append(a))
+        self.at(0.0, "ESL AP automation started")
+        self.at(1.5, "[APPL_AUTO]: ESL tag [0:0] added, connecting")
+        self.at(4.0, "[APPL]: ESL tag [0 : 0] synchronized (status 0x0000)",
+                "[APPL_AUTO]: 1/2 tags synced")
+        self.at(6.0, "[APPL_AUTO]: ESL tag [0:1] added, connecting")
+        self.at(9.5, "[APPL]: ESL tag [0 : 1] synchronized (status 0x0000)")
+
+        self.assertEqual(timed, [(0, 0, 1.5, 2.5), (0, 1, 2.0, 3.5)])
+        self.assertEqual((self.tag(0, 0).scan_s, self.tag(0, 0).sync_s), (1.5, 2.5))
+        self.assertEqual((self.tag(0, 1).scan_s, self.tag(0, 1).sync_s), (2.0, 3.5))
+
+    def test_failed_sync_not_timed(self):
+        timed = []
+        self.c.sync_timed.connect(lambda *a: timed.append(a))
+        self.at(0.0, "ESL AP automation started",
+                "[APPL_AUTO]: ESL tag [0:0] added, connecting")
+        self.at(3.0, "[APPL]: ESL tag [0 : 0] synchronized (status 0x0101)",
+                "[APPL_AUTO]: ESL tag [0:0] sync failed (status 0x0101)")
+        self.assertEqual(timed, [])
+
+    def test_manual_sync_has_no_timing(self):
+        # sync_esl typed in the console: no 'added' line, so nothing to time from.
+        self.at(5.0, "[APPL]: ESL tag [0 : 3] synchronized (status 0x0000)")
+        self.assertIsNone(self.tag(0, 3).sync_s)
+        self.assertIsNotNone(self.tag(0, 3).synced_at)
+
+    def test_auto_into_group(self):
+        groups, status = [], []
+        self.c.auto_group.connect(groups.append)
+        self.c.auto_status_changed.connect(status.append)
+        self.c.start_auto(3, 2)
+        self.assertEqual(self.sent, ["esl_ap auto 3 2"])
+        self.feed("[APPL_AUTO]: esl_ap auto requested (target 3 tags, next [2:0]) - init + scan",
+                  "ESL AP automation started")
+        self.assertEqual(groups, [2])
+        self.assertEqual(status[-1], "Scanning for tags (group 2)…")
+
+    def test_console_run_reports_group(self):
+        groups = []
+        self.c.auto_group.connect(groups.append)
+        self.feed("uart:~$ esl_ap auto 2 1",
+                  "[APPL_AUTO]: esl_ap auto requested (target 2 tags, next [1:4]) - init + scan")
+        self.assertEqual(groups, [1])
+
+    def test_specific_start_error_not_overwritten(self):
+        status = []
+        self.c.auto_status_changed.connect(status.append)
+        self.c.start_auto(5, 1)
+        self.feed("[APPL_AUTO]: Cannot add 5 tags to group 1: only 3 of 16 response slots free",
+                  "Invalid group or too many tags for the free response slots in that group.")
+        self.assertEqual(status[-1], "Error: Cannot add 5 tags to group 1: only 3 of 16 "
+                                     "response slots free")
+
+    def test_generic_start_error_shown_alone(self):
+        # APPL_ESL_ERR can be compiled out; the CLI line must still surface.
+        status = []
+        self.c.auto_status_changed.connect(status.append)
+        self.c.start_auto(5, 1)
+        self.feed("Invalid group or too many tags for the free response slots in that group.")
+        self.assertTrue(status[-1].startswith("Error: Invalid group or too many tags"))
 
     def test_failed_sync_is_not_listed(self):
         self.feed("[APPL]: ESL tag [0 : 0] synchronized (status 0x0101)")

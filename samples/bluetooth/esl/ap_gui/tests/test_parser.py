@@ -51,10 +51,25 @@ class ParserTest(unittest.TestCase):
         self.assertIsInstance(parse("[APPL_AUTO]: ESL tag [0:1] connect failed (status 62)"),
                               ev.AutoError)
         self.assertIsInstance(parse("[APPL_AUTO]: tag disconnected before sync"), ev.AutoError)
-        self.assertIsInstance(parse("[APPL_AUTO]: Cannot add 40 tags (next slot 0, capacity 4); "
-                                    "multi-group operation requires 16 entries per group"),
-                              ev.AutoError)
-        self.assertIsInstance(parse("Failed to start ESL AP automation (0x0103)"), ev.AutoError)
+        self.assertEqual(parse("Failed to start ESL AP automation (0x0103)"),
+                         ev.AutoError("Failed to start ESL AP automation (0x0103)", generic=True))
+
+    def test_group_errors(self):
+        self.assertEqual(parse("Invalid group. Use 0-3."), ev.AutoError("Invalid group. Use 0-3."))
+        self.assertEqual(
+            parse("Invalid group or too many tags for the free response slots in that group."),
+            ev.AutoError("Invalid group or too many tags for the free response slots in that group.",
+                         generic=True))
+        self.assertEqual(parse("[APPL_AUTO]: Invalid group 5 (valid groups: 0-3)"),
+                         ev.AutoError("Invalid group 5 (valid groups: 0-3)"))
+        self.assertIsInstance(parse("[APPL_AUTO]: Cannot add 5 tags to group 1: only 3 of 16 "
+                                    "response slots free"), ev.AutoError)
+        self.assertIsInstance(parse("[APPL_AUTO]: multi-group operation requires 16 entries "
+                                    "per group"), ev.AutoError)
+
+    def test_auto_requested(self):
+        self.assertEqual(parse("[APPL_AUTO]: esl_ap auto requested (target 4 tags, next [1:3]) "
+                               "- init + scan"), ev.AutoRequested(4, 1, 3))
 
     def test_auto_noise_ignored(self):
         self.assertIsNone(parse("[APPL_AUTO]: on_connected hook (tag [0:1], status 0, state 4)"))
@@ -80,7 +95,8 @@ class CommandsTest(unittest.TestCase):
         self.assertEqual(commands.ping(20, 0), "esl_ap ping 14 0")
 
     def test_ranges(self):
-        self.assertEqual(commands.auto(4), "esl_ap auto 4")
+        self.assertEqual(commands.auto(4), "esl_ap auto 4 0")
+        self.assertEqual(commands.auto(16, 12), "esl_ap auto 16 12")  # decimal, unlike ping
         with self.assertRaises(ValueError):
             commands.auto(0)
         with self.assertRaises(ValueError):

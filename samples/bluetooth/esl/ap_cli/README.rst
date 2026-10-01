@@ -34,7 +34,7 @@ The sample provides the following shell commands under the ``esl_ap`` namespace:
 * ``bt_on`` - Initialize Bluetooth stack
 * ``start_scan`` - Start scanning for ESL tags
 * ``stop_scan`` - Stop scanning operation
-* ``auto [count]`` - Sync 1-1000 additional tags within configured capacity, retaining previously synced tags
+* ``auto [count] [group]`` - Sync 1-1000 additional tags into a group (default 0), retaining previously synced tags. Fails if count exceeds the free response slots (16 per group) in that group
 * ``auto_stop`` - Finish the current tag attempt, then stop without removing successful tags
 * ``discover <Grp ID> <ESL ID>`` - Discover ESL services on a specific tag
 * ``start_padv`` - Start periodic advertising
@@ -48,8 +48,11 @@ The sample provides the following shell commands under the ``esl_ap`` namespace:
 Repeated automation runs continue assigning ESL IDs within the current AP boot.
 For example, ``esl_ap auto 3`` assigns addresses ``0:0`` through ``0:2``; after
 it finishes, ``esl_ap auto 1`` assigns ``0:3``. The current diagnostic profiles
-stop at four tags. With a compatible library and larger tables, the allocator
-advances through ``0:15``, then ``1:0`` through ``1:15``, and so on.
+stop at four tags. With a compatible library and larger tables, a group holds
+IDs ``0`` through ``15``; pass the group as the second argument
+(``esl_ap auto 4 1`` fills ``1:0`` through ``1:3``). Each group keeps its own
+free-slot count, and a count larger than the free slots in the chosen group is
+rejected before scanning.
 These addresses are shown in decimal.
 The CLI address arguments for manual commands use hexadecimal.
 

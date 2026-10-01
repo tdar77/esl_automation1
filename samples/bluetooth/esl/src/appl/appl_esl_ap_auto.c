@@ -35,8 +35,11 @@
 static enum appl_esl_ap_auto_state auto_state = AUTO_IDLE;
 static UINT16 synced_count;
 static UINT16 target_count = CONFIG_ESL_AP_AUTO_SYNC_COUNT;
-/* Retained across runs: a slot is committed only after successful sync. */
-static UINT16 next_slot;
+/* Group being populated by the current run. */
+static UCHAR target_group;
+/* Retained across runs, per group: next free response slot (ESL ID). A slot is
+ * committed only after successful sync. */
+static UCHAR group_next_slot[APPL_ESL_MAX_NO_OF_GROUPS];
 static UCHAR tag_pending = BT_ESL_FALSE;
 static UCHAR tag_failed = BT_ESL_FALSE;
 static UCHAR stop_requested = BT_ESL_FALSE;
@@ -174,10 +177,12 @@ static void sync_delay_work_handler(struct k_work *work)
     }
 }
 
-API_RESULT appl_esl_ap_auto_start(UINT16 count)
+API_RESULT appl_esl_ap_auto_start(UINT16 count, UCHAR group)
 {
     API_RESULT retval;
-    UINT16 capacity;
+    UINT16 groups;
+    UINT16 slots_per_group;
+    UINT16 free_slots;
 
     if ((AUTO_IDLE != auto_state) && (AUTO_DONE != auto_state))
     {
@@ -188,22 +193,38 @@ API_RESULT appl_esl_ap_auto_start(UINT16 count)
     }
 
     count = (0U != count) ? count : (UINT16)CONFIG_ESL_AP_AUTO_SYNC_COUNT;
-    capacity = MIN(APPL_ESL_MAX_NO_OF_GROUPS, APPL_ESL_AP_PAWR_SUBEVENT_COUNT) *
-               APPL_ESL_AP_RESPONDERS_PER_GROUP;
-    /* Allow a smaller single-group table for initialization diagnostics.
-     * Multi-group allocation still uses a fixed stride of 16 ESL IDs. */
+    groups = MIN(APPL_ESL_MAX_NO_OF_GROUPS, APPL_ESL_AP_PAWR_SUBEVENT_COUNT);
+    /* Response slots per group. A smaller single-group table is allowed for
+     * initialization diagnostics; multi-group allocation requires the full
+     * stride of 16 ESL IDs per group. */
+    slots_per_group = APPL_ESL_AP_RESPONDERS_PER_GROUP;
     if (1U == APPL_ESL_MAX_NO_OF_GROUPS)
     {
-        capacity = MIN(capacity, APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP);
+        slots_per_group = MIN(slots_per_group, APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP);
     }
-    if (((APPL_ESL_MAX_NO_OF_GROUPS > 1U) &&
-         (APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP < APPL_ESL_AP_RESPONDERS_PER_GROUP)) ||
-        (count > APPL_ESL_AP_AUTO_MAX_COUNT) || (next_slot + count > capacity))
+
+    if ((APPL_ESL_MAX_NO_OF_GROUPS > 1U) &&
+        (APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP < APPL_ESL_AP_RESPONDERS_PER_GROUP))
     {
         APPL_ESL_ERR(
-        "[APPL_AUTO]: Cannot add %d tags (next slot %d, capacity %d); "
-        "multi-group operation requires %d entries per group\n",
-        count, next_slot, capacity, APPL_ESL_AP_RESPONDERS_PER_GROUP);
+        "[APPL_AUTO]: multi-group operation requires %d entries per group\n",
+        APPL_ESL_AP_RESPONDERS_PER_GROUP);
+        return BT_ESL_AP_INVALID_PARAMETER;
+    }
+
+    if (group >= groups)
+    {
+        APPL_ESL_ERR(
+        "[APPL_AUTO]: Invalid group %d (valid groups: 0-%d)\n", group, groups - 1U);
+        return BT_ESL_AP_INVALID_PARAMETER;
+    }
+
+    free_slots = slots_per_group - MIN(group_next_slot[group], slots_per_group);
+    if ((count > APPL_ESL_AP_AUTO_MAX_COUNT) || (count > free_slots))
+    {
+        APPL_ESL_ERR(
+        "[APPL_AUTO]: Cannot add %d tags to group %d: only %d of %d response slots free\n",
+        count, group, free_slots, slots_per_group);
         return BT_ESL_AP_INVALID_PARAMETER;
     }
 
@@ -220,13 +241,13 @@ API_RESULT appl_esl_ap_auto_start(UINT16 count)
     auto_state = AUTO_SCANNING;
     synced_count = 0U;
     target_count = count;
+    target_group = group;
     stop_requested = BT_ESL_FALSE;
 
     APPL_ESL_TRC(
     "[APPL_AUTO]: esl_ap auto requested (target %d tags, next [%d:%d]) - "\
     "init + scan\n",
-    target_count, next_slot / APPL_ESL_AP_RESPONDERS_PER_GROUP,
-    next_slot % APPL_ESL_AP_RESPONDERS_PER_GROUP);
+    target_count, target_group, group_next_slot[target_group]);
 
     appl_init_esl();
 
@@ -448,7 +469,7 @@ void appl_esl_ap_auto_on_synchronised(BT_ESL_ADDR *esl_addr, UINT16 status)
     }
 
     tag_pending = BT_ESL_FALSE;
-    next_slot++;
+    group_next_slot[target_group]++;
     synced_count++;
 
     APPL_ESL_TRC(
@@ -515,8 +536,8 @@ void appl_esl_ap_auto_on_device_found(BT_ESL_BD_ADDR *peer_addr, UCHAR *adv_data
 
     (void)appl_esl_ap_scan_esl_device(BT_ESL_FALSE);
 
-    esl_addr.group_id = (UCHAR)(next_slot / APPL_ESL_AP_RESPONDERS_PER_GROUP);
-    esl_addr.esl_id = (UCHAR)(next_slot % APPL_ESL_AP_RESPONDERS_PER_GROUP);
+    esl_addr.group_id = target_group;
+    esl_addr.esl_id = group_next_slot[target_group];
 
     current_esl_addr = esl_addr;
     current_peer_addr = *peer_addr;

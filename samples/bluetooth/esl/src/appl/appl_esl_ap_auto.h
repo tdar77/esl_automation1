@@ -36,12 +36,13 @@ enum appl_esl_ap_auto_state
 
 /* -------------------------------------------- Function Declarations */
 /* count: number of additional tags to sync before stopping, or 0 to use the
- * Kconfig default (CONFIG_ESL_AP_AUTO_SYNC_COUNT). Synced tags are retained
- * across runs, filling IDs 0-15 before advancing to the next group.
- * Returns BT_ESL_AP_INVALID_PARAMETER if the batch exceeds remaining capacity.
+ * Kconfig default (CONFIG_ESL_AP_AUTO_SYNC_COUNT). group: group to populate.
+ * Synced tags are retained across runs, filling IDs 0-15 of that group.
+ * Returns BT_ESL_AP_INVALID_PARAMETER if the group is invalid or count exceeds
+ * the response slots still free in that group.
  * Returns BT_ESL_AP_BUSY if automation is already running (state is neither
  * AUTO_IDLE nor AUTO_DONE), without disturbing the run in progress. */
-API_RESULT appl_esl_ap_auto_start(UINT16 count);
+API_RESULT appl_esl_ap_auto_start(UINT16 count, UCHAR group);
 /* Finish any in-flight attempt, then stop. Only failed attempts are removed. */
 void appl_esl_ap_auto_stop(void);
 
