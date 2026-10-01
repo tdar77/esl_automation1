@@ -1917,11 +1917,26 @@ static void request_cb
 {
     if ((NULL != adv) && (NULL != request))
     {
-#ifdef BT_ESL_AP_HAVE_SUBEVENT_ADJUSTMENT
-        BT_esl_ap_subevent_data_request_handler((UCHAR)request->start - 1, (UCHAR)request->count);
-#else /* BT_ESL_AP_HAVE_SUBEVENT_ADJUSTMENT */
-        BT_esl_ap_subevent_data_request_handler((UCHAR)request->start, (UCHAR)request->count);
-#endif /* BT_ESL_AP_HAVE_SUBEVENT_ADJUSTMENT */
+        /*
+         * The ESL core handler takes a [first, end) range of group IDs
+         * (group ID == subevent), not (start, count). Passing the
+         * controller's (start, count) through, with or without the old
+         * start - 1 adjustment, only covers some groups: e.g. start = 1,
+         * count = 1 maps to group 0, and start = 0 maps to nothing. Groups
+         * that are never serviced keep their command buffer pending, so
+         * later commands to them fail with BT_ESL_AP_BUSY.
+         *
+         * Hand over each requested subevent (wrapping modulo the subevent
+         * count) as its own one-group range.
+         */
+        UCHAR num_subevents = pawr_params.num_subevents;
+
+        for (UCHAR i = 0U; (i < request->count) && (0U != num_subevents); i++)
+        {
+            UCHAR subevent = (UCHAR)((request->start + i) % num_subevents);
+
+            BT_esl_ap_subevent_data_request_handler(subevent, (UCHAR)(subevent + 1U));
+        }
     }
     else
     {

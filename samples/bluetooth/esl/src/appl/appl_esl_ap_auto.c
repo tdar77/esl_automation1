@@ -194,23 +194,10 @@ API_RESULT appl_esl_ap_auto_start(UINT16 count, UCHAR group)
 
     count = (0U != count) ? count : (UINT16)CONFIG_ESL_AP_AUTO_SYNC_COUNT;
     groups = MIN(APPL_ESL_MAX_NO_OF_GROUPS, APPL_ESL_AP_PAWR_SUBEVENT_COUNT);
-    /* Response slots per group. A smaller single-group table is allowed for
-     * initialization diagnostics; multi-group allocation requires the full
-     * stride of 16 ESL IDs per group. */
-    slots_per_group = APPL_ESL_AP_RESPONDERS_PER_GROUP;
-    if (1U == APPL_ESL_MAX_NO_OF_GROUPS)
-    {
-        slots_per_group = MIN(slots_per_group, APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP);
-    }
-
-    if ((APPL_ESL_MAX_NO_OF_GROUPS > 1U) &&
-        (APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP < APPL_ESL_AP_RESPONDERS_PER_GROUP))
-    {
-        APPL_ESL_ERR(
-        "[APPL_AUTO]: multi-group operation requires %d entries per group\n",
-        APPL_ESL_AP_RESPONDERS_PER_GROUP);
-        return BT_ESL_AP_INVALID_PARAMETER;
-    }
+    /* Response slots per group: each group has 16 PAwR response slots, but
+     * can't hold more tags than the AP's per-group tag table. */
+    slots_per_group = MIN(APPL_ESL_AP_RESPONDERS_PER_GROUP,
+                          APPL_ESL_MAX_NO_OF_TAGS_PER_GROUP);
 
     if (group >= groups)
     {

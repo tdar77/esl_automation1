@@ -34,7 +34,7 @@ The sample provides the following shell commands under the ``esl_ap`` namespace:
 * ``bt_on`` - Initialize Bluetooth stack
 * ``start_scan`` - Start scanning for ESL tags
 * ``stop_scan`` - Stop scanning operation
-* ``auto [count] [group]`` - Sync 1-1000 additional tags into a group (default 0), retaining previously synced tags. Fails if count exceeds the free response slots (16 per group) in that group
+* ``auto [count] [group]`` - Sync 1-1000 additional tags into a group (default 0), retaining previously synced tags. Fails if count exceeds the free response slots (16 per group, capped by ``CONFIG_BT_ESL_MAX_ESL_TAGS_SUPPORTED``) in that group
 * ``auto_stop`` - Finish the current tag attempt, then stop without removing successful tags
 * ``discover <Grp ID> <ESL ID>`` - Discover ESL services on a specific tag
 * ``start_padv`` - Start periodic advertising

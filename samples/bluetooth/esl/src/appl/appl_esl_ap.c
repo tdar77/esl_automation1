@@ -99,6 +99,16 @@ DECL_STATIC BT_ESL_AP_CALLBACKS appl_esl_callbacks =
 /**  ESL AP tag table */
 DECL_STATIC BT_ESL_TAG_TABLE appl_esl_tag_table;
 
+/**
+ * Per-group PAwR command buffer used by the ESL core library (63 bytes per
+ * group, indexed by group ID up to the runtime group count). The prebuilt
+ * esl_core.a only reserves one group's worth, so group 1+ would overrun into
+ * unrelated RAM. ap_cli/CMakeLists.txt weakens the library's definition so
+ * this one, sized for every configured group, is used instead.
+ */
+#define APPL_ESL_AP_SYNC_BUFFER_GROUP_SIZE              63U
+UCHAR sync_buffer[APPL_ESL_MAX_NO_OF_GROUPS * APPL_ESL_AP_SYNC_BUFFER_GROUP_SIZE];
+
 /** ESL AP groups */
 DECL_STATIC BT_ESL_GROUP appl_esl_groups[APPL_ESL_MAX_NO_OF_GROUPS];
 
